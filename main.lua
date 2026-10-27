@@ -32,6 +32,19 @@ local origGetAutoBBox = nil
 local patched = false
 local patched_panel = false
 
+--- Effective state for a document. The per-document configurable is loaded
+--- after this plugin's init(), so read it at call time instead of trusting
+--- the value captured in init().
+--- @param doc any
+--- @return boolean
+local function cropEnhancerEnabled(doc)
+  local configurable = doc and doc.configurable
+  if configurable and configurable.crop_enhancer ~= nil then
+    return configurable.crop_enhancer == 1
+  end
+  return crop_enhancer_enabled
+end
+
 function CropEnhancer:init()
   dbg("init() lang=%s", i18n.getLang())
   self.ui.menu:registerToMainMenu(self)
@@ -59,8 +72,9 @@ function CropEnhancer:init()
     if KoptInterface and KoptInterface.getAutoBBox then
       origGetAutoBBox = KoptInterface.getAutoBBox
       function KoptInterface:getAutoBBox(doc, pageno)
-        dbg("getAutoBBox enabled=%s", tostring(crop_enhancer_enabled))
-        if not crop_enhancer_enabled then
+        local enabled = cropEnhancerEnabled(doc)
+        dbg("getAutoBBox enabled=%s", tostring(enabled))
+        if not enabled then
           return origGetAutoBBox(self, doc, pageno)
         end
 
@@ -125,7 +139,7 @@ function CropEnhancer:init()
     if KoptInterface and KoptInterface.getPanelFromPage then
       local origGetPanelFromPage = KoptInterface.getPanelFromPage
       function KoptInterface:getPanelFromPage(doc, pageno, pos)
-        if not crop_enhancer_enabled then
+        if not cropEnhancerEnabled(doc) then
           return origGetPanelFromPage(self, doc, pageno, pos)
         end
 
@@ -152,6 +166,15 @@ function CropEnhancer:init()
   end
 
   self:onDispatcherRegisterActions()
+end
+
+-- Per-document settings are read after init(); keep the fallback flag in sync
+-- with what was saved so the menu/toolbar start from the right state.
+function CropEnhancer:onReadSettings()
+  local configurable = self.ui.document and self.ui.document.configurable
+  if configurable and configurable.crop_enhancer ~= nil then
+    crop_enhancer_enabled = configurable.crop_enhancer == 1
+  end
 end
 
 function CropEnhancer:patchKoptOptions()
@@ -347,7 +370,7 @@ function CropEnhancer:addToMainMenu(menu_items)
       {
         text = _("Enhanced Crop"),
         checked_func = function()
-          return crop_enhancer_enabled
+          return cropEnhancerEnabled(self.ui.document)
         end,
         callback = function()
           crop_enhancer_enabled = not crop_enhancer_enabled
