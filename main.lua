@@ -170,8 +170,6 @@ function CropEnhancer:init()
   self:onDispatcherRegisterActions()
 end
 
--- Per-document settings are read after init(); keep the fallback flag in sync
--- with what was saved so the menu/toolbar start from the right state.
 function CropEnhancer:onReadSettings()
   local configurable = self.ui.document and self.ui.document.configurable
   if configurable and configurable.crop_enhancer ~= nil then

@@ -16,11 +16,13 @@ crop_enhancer.koplugin/
 ├── crop_enhancer_info.lua       Version, author, GitHub URL
 ├── crop_enhancer_settings.lua   SETTINGS_DEFAULTS, loadSetting, saveSetting
 ├── crop_enhancer_logger.lua     dbg() (respects debug_log), now_ms()
-├── crop_enhancer_detect.lua     Leptonica pipeline: bitmap2pix → threshold → invert → conncomp → bbox
+├── crop_enhancer_detect.lua     Leptonica pipeline: bitmap2pix → threshold → conncomp → bbox
 ├── crop_enhancer_i18n.lua       Lazy-loading translations from l10n/<lang>.lua
 ├── main.lua                     Plugin entry: UI, events, KoptInterface override, menu
+├── bench/                       Crop comparison harness and snapshots
 └── l10n/
     ├── en.lua                   English
+    ├── pt_BR.lua                Português (Brasil)
     ├── vi.lua                   Tiếng Việt
     ├── ja.lua                   日本語
     ├── zh.lua                   简体中文
@@ -91,9 +93,9 @@ pixThresholdToBinary         grayscale → binary (1 = ink, 0 = paper)
 pixConnCompPixa              ink components (boxes + images)
   ↓
 filter: drop                 - small (< min_content_area px²)
-  ↓                            - edge-touching and either thin
-                               (<= thin_edge_frac of page) or
-                               hollow (ink fill <= frame_fill_max
+  ↓                            - edge-touching and either a solid
+                               thin line (<= thin_edge_frac of page)
+                               or hollow (ink fill <= frame_fill_max
                                of the bounding box)
   ↓
 merge kept boxes → bbox      + margin (fraction of DPI)
@@ -107,20 +109,22 @@ merge kept boxes → bbox      + margin (fraction of DPI)
 - Adding a language: just create `l10n/<2_letter_code>.lua`
 - Module is named `crop_enhancer_i18n` (not `i18n`) to avoid namespace collisions
 
-### UI injection (`main.lua:124-248`)
+### UI injection (`main.lua`)
 
-`patchKoptOptions()` injects 5 items into the `appbar.crop` panel in `koptoptions.lua`:
-- Toggle (on/off) + 4 settings with `more_options` SpinWidget
+`patchKoptOptions()` injects 7 items into the `appbar.crop` panel in `koptoptions.lua`:
+- Toggle (on/off) + 6 settings with `more_options` SpinWidget
 - Each setting has `enabled_func` that disables when enhanced crop is off
 - Uses `toggle` style (like `auto_straighten`) with text labels
 
-### Dispatcher actions (`main.lua:250-262`)
+### Dispatcher actions (`main.lua`)
 
-5 actions registered for key/gesture binding:
+7 actions registered for key/gesture binding:
 - `crop_enhancer_toggle`
 - `crop_enhancer_threshold`
 - `crop_enhancer_border_width`
 - `crop_enhancer_min_area`
+- `crop_enhancer_frame_fill`
+- `crop_enhancer_thin_edge`
 - `crop_enhancer_margin`
 
 ### Events

@@ -9,9 +9,10 @@ local loadSetting = settings.loadSetting
 --- @type table
 local lev
 
+local RULE_FILL_MIN = 0.80
+
 local function ensureLeptonica()
   if lev then return end
-  -- Pulls in ffi/leptonica_h, which declares PIX/PIXA/BOXA/l_int32.
   require("ffi/koptcontext")
   ffi.cdef [[
 BOXA *pixConnCompPixa(PIX *, PIXA **, l_int32);
@@ -88,9 +89,9 @@ local function componentInk(pixa, index)
 end
 
 --- Decide whether a component is page content rather than page furniture.
---- Border-touching components are only dropped when they look like a scan
---- artifact: a thin line, or a hollow frame whose ink fills little of its
---- bounding box. Full-bleed artwork is kept.
+--- Border-touching components are dropped when they look like a scan
+--- artifact: a solid thin rule, or a hollow frame whose ink fills little of
+--- its bounding box. Full-bleed artwork and text-like thin components are kept.
 --- @return boolean
 local function isContentComponent(pixa, index, bx, by, bw, bh, img_w, img_h,
     border_max_width, thin_limit, min_content_area, frame_fill_max)
@@ -102,8 +103,11 @@ local function isContentComponent(pixa, index, bx, by, bw, bh, img_w, img_h,
       or (by + bh >= img_h - border_max_width)
   if not touches_border then return true end
   if pixa == nil then return true end
-  if bw <= thin_limit or bh <= thin_limit then return false end
-  return componentInk(pixa, index) / area > frame_fill_max
+  local fill = componentInk(pixa, index) / area
+  if bw <= thin_limit or bh <= thin_limit then
+    return fill < RULE_FILL_MIN
+  end
+  return fill > frame_fill_max
 end
 
 --- Detect page content bounds using leptonica connected-component analysis.
@@ -150,14 +154,10 @@ local function enhancedCropBmp(kc)
   local t2 = now_ms()
   if pixg == nil then return nil end
 
-  -- Threshold -> binary: leptonica sets 1 for pixels darker than the
-  -- threshold, so this is already 1=content, 0=background.
   local pix_binary = _gc_ptr(lev.pixThresholdToBinary(pixg, threshold), pixDestroy)
   local t3 = now_ms()
   if pix_binary == nil then return nil end
 
-  -- Find connected components, keeping the component images so border
-  -- components can be classified by ink density.
   local pixa_ref = ffi.new("PIXA *[1]")
   local bb = _gc_ptr(lev.pixConnCompPixa(pix_binary, pixa_ref, 8), boxaDestroy)
   local t5 = now_ms()
@@ -258,7 +258,6 @@ local function getEnhancedPanel(kc, pos)
   end
   if pixg == nil then return nil end
 
-  -- 1=content, 0=background (see enhancedCropBmp above)
   local pix_binary = _gc_ptr(lev.pixThresholdToBinary(pixg, threshold), pixDestroy)
   if pix_binary == nil then return nil end
 

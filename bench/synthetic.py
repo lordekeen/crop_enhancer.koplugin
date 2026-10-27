@@ -40,6 +40,14 @@ save(page, "EDGEBAND")
 page = Image.new("L", (1000, 1400), 255)
 draw = ImageDraw.Draw(page)
 text_block(draw)
+for x in range(80, 700, 20):
+    draw.rectangle([x, 0, x + 15, 11], fill=20)
+    draw.rectangle([x + 4, 3, x + 11, 8], fill=255)
+save(page, "EDGETEXT")
+
+page = Image.new("L", (1000, 1400), 255)
+draw = ImageDraw.Draw(page)
+text_block(draw)
 for x in range(100, 420, 18):
     draw.rectangle([x, 1300, x + 8, 1310], fill=30)
 save(page, "FOOTER")

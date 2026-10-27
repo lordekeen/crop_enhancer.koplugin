@@ -19,8 +19,7 @@ git show 71dd1b1:crop_enhancer_detect.lua > bench/invertfix_detect.lua
 ```
 
 `prep.py` writes real pages from a directory of images (`SAMPLES_DIR`),
-`synthetic.py` writes the synthetic edge cases (frame, edge band, speckles,
-footer) into `pages/` and `raw/`.
+`synthetic.py` writes the synthetic edge cases (frame, edge band, edge text, speckles, footer) into `pages/` and `raw/`.
 
 Usage:
 
@@ -39,3 +38,7 @@ writes them from image files, together with the PNGs used for the visuals.
 The harness needs a KOReader build tree because `ffi.loadlib` looks for
 `libs/` relative to the working directory, and stock LuaJIT lacks
 KOReader's `ffi.libc` extension (the harness sets it manually).
+
+`newCtx` fills an identity grayscale palette: willus's `bmp_is_grayscale()`
+checks it, and a zeroed palette sends the stock cropper down a conversion
+path that yields an all-black `srcgrey`.

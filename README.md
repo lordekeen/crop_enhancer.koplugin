@@ -8,7 +8,7 @@ Replaces KOReader's built-in page auto-crop algorithm with leptonica connected-c
 - **Panel zoom** — overrides `getPanelFromPage` with the same leptonica pipeline, finding the specific panel at the touch position.
 - **Configurable** — threshold, border width, minimum content area, and margin are all adjustable via the bottom toolbar or Settings menu.
 - **Dispatcher actions** — all settings are available as Dispatcher actions for key/gesture binding.
-- **i18n** — English, Vietnamese, Japanese, Simplified Chinese, Traditional Chinese.
+- **i18n** — English, Portuguese (Brazil), Vietnamese, Japanese, Simplified Chinese, Traditional Chinese.
 
 ## Screenshoot
 | Before (Auto crop default) | After (With alogrimth) | After (With alogrimth + padding) |
@@ -58,10 +58,10 @@ bitmap2pix(kc.src)
 ### Component filter
 
 A component is kept unless it is noise (smaller than `min_content_area`) or
-page furniture: touching the page edge *and* either thinner than `thin_edge_frac`
-of the page, or with ink filling less than `frame_fill_max` of its bounding box
-(scan frames, rules). Full-bleed artwork touches the edge too, but it is dense,
-so it is kept and does not cause over-cropping.
+page furniture: touching the page edge *and* either a solid line thinner than
+`thin_edge_frac` of the page, or a hollow frame whose ink fills less than
+`frame_fill_max` of its bounding box. Full-bleed artwork touches the edge too,
+but it is dense, so it is kept; thin text-like components are kept as well.
 
 ### Auto-crop (`getAutoBBox`)
 

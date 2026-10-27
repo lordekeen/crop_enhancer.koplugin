@@ -4,18 +4,19 @@ local HARNESS = os.getenv("HARNESS_DIR") or "."
 package.path = ROOT.."/base/?.lua;"..ROOT.."/frontend/?.lua;"..PLUGIN.."/?.lua;./common/?.lua;./?.lua;"..package.path
 package.cpath = "./libs/?.so;"..package.cpath
 local ffi = require("ffi")
-ffi.libc = "gnu" -- KOReader's patched luajit exports this; stock luajit does not
+ffi.libc = "gnu"
 require("ffi/loadlib")
 local C = ffi.C
 local KOPTContext = require("ffi/koptcontext")
 local k2pdfopt = KOPTContext.k2pdfopt
 
--- minimal stubs for the plugin modules
 G_reader_settings = {
   readSetting = function(_, _, default) return default end,
   saveSetting = function() end,
 }
 G_defaults = G_reader_settings
+
+local now_ms = require("crop_enhancer_logger").now_ms
 
 local fixed = require("crop_enhancer_detect")
 local upstream = dofile(HARNESS.."/upstream_detect.lua")
@@ -46,9 +47,6 @@ local function newCtx(data, w, h)
   ffi.copy(buf, data, w * h)
   kc.src.data = buf
   kc.src.size_allocated = w * h
-  -- bmpmupdf_pixmap_to_bmp() also fills an identity palette; willus's
-  -- bmp_is_grayscale() checks it, and a zeroed palette sends the stock
-  -- cropper down a conversion path that yields an all-black srcgrey.
   for i = 0, 255 do
     kc.src.red[i], kc.src.green[i], kc.src.blue[i] = i, i, i
   end
@@ -69,19 +67,19 @@ for name in arg[1]:gmatch("[^,]+") do
   local data, w, h = readGray(HARNESS.."/raw/"..name..".gray")
 
   local kc = newCtx(data, w, h)
-  local t0 = os.clock()
+  local t0 = now_ms()
   k2pdfopt.k2pdfopt_crop_bmp(kc)
-  local t1 = os.clock()
+  local t1 = now_ms()
   local bb = kc.bbox
-  emit(name, "stock", (t1 - t0) * 1000, bb.x0, bb.y0, bb.x1, bb.y1)
+  emit(name, "stock", t1 - t0, bb.x0, bb.y0, bb.x1, bb.y1)
   kc:free()
 
   for _, variant in ipairs({ { "upstream", upstream }, { "invertfix", invertfix }, { "patched", fixed } }) do
     local kc2 = newCtx(data, w, h)
-    local t2 = os.clock()
+    local t2 = now_ms()
     local x0, y0, x1, y1 = variant[2].enhancedCropBmp(kc2)
-    local t3 = os.clock()
-    emit(name, variant[1], (t3 - t2) * 1000, x0, y0, x1, y1)
+    local t3 = now_ms()
+    emit(name, variant[1], t3 - t2, x0, y0, x1, y1)
     kc2:free()
   end
 end
