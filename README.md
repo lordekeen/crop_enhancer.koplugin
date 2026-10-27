@@ -47,10 +47,19 @@ Access via: **Bottom toolbar (crop panel) > Enhanced Crop** or **Tools > Enhance
 bitmap2pix(kc.src)
   → pixConvertRGBToGrayFast     (32bpp → 8bpp)
   → pixThresholdToBinary        (1 = ink, 0 = paper)
-  → pixConnCompBB               (connected components of ink → bounding boxes)
-  → filter: discard border-touching and small components
+  → pixConnCompPixa            (ink components, kept for fill checks)
+  → filter: drop small components and thin/hollow page furniture;
+            keep full-bleed artwork
   → merge kept boxes → bbox
 ```
+
+### Component filter
+
+A component is kept unless it is noise (smaller than `min_content_area`) or
+page furniture: touching the page edge *and* either thinner than 2% of the
+page, or with ink filling less than 10% of its bounding box (scan frames,
+rules). Full-bleed artwork touches the edge too, but it is dense, so it is
+kept and does not cause over-cropping.
 
 ### Auto-crop (`getAutoBBox`)
 

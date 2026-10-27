@@ -15,7 +15,7 @@ for line in open(RESULTS):
         x0,y0,x1,y1 = map(int,p[2:6]); ms=float(p[6])
         res[page][algo] = (x0,y0,x1,y1,ms)
 
-ALGOS = ["stock","upstream","patched"]
+ALGOS = ["stock","upstream","invertfix","patched"]
 def ink_bbox(im, thr=200):
     # bbox of pixels darker than thr
     mask = im.point(lambda v: 255 if v < thr else 0)
@@ -69,7 +69,7 @@ for page in res:
     tiles=[]
     # tile 1: page with boxes
     t = im.copy(); d=ImageDraw.Draw(t)
-    colors={"stock":(230,40,40),"upstream":(40,90,230),"patched":(20,160,60)}
+    colors={"stock":(230,40,40),"upstream":(40,90,230),"invertfix":(240,140,0),"patched":(20,160,60)}
     for algo in ALGOS:
         b=res[page].get(algo)
         if b:

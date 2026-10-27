@@ -19,6 +19,7 @@ G_defaults = G_reader_settings
 
 local fixed = require("crop_enhancer_detect")
 local upstream = dofile(HARNESS.."/upstream_detect.lua")
+local invertfix = dofile(HARNESS.."/invertfix_detect.lua")
 
 local function readGray(path)
   local f = assert(io.open(path, "rb"))
@@ -75,7 +76,7 @@ for name in arg[1]:gmatch("[^,]+") do
   emit(name, "stock", (t1 - t0) * 1000, bb.x0, bb.y0, bb.x1, bb.y1)
   kc:free()
 
-  for _, variant in ipairs({ { "upstream", upstream }, { "patched", fixed } }) do
+  for _, variant in ipairs({ { "upstream", upstream }, { "invertfix", invertfix }, { "patched", fixed } }) do
     local kc2 = newCtx(data, w, h)
     local t2 = os.clock()
     local x0, y0, x1, y1 = variant[2].enhancedCropBmp(kc2)

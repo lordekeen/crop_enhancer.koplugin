@@ -88,10 +88,12 @@ pixConvertRGBToGrayFast      32bpp → 8bpp (skip if already 8bpp)
   ↓
 pixThresholdToBinary         grayscale → binary (1 = ink, 0 = paper)
   ↓
-pixConnCompBB                connected components of ink → BOXA of boxes
+pixConnCompPixa              ink components (boxes + images)
   ↓
-filter: discard              - border-touching (within border_max_width px)
-                             - small (< min_content_area px²)
+filter: drop                 - small (< min_content_area px²)
+  ↓                            - edge-touching and either thin
+                               (<= 2% of page) or hollow (ink fill
+                               <= 10% of the bounding box)
   ↓
 merge kept boxes → bbox      + margin (fraction of DPI)
 ```

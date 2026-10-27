@@ -9,8 +9,23 @@ local loadSetting = settings.loadSetting
 --- @type table
 local lev
 
+-- Border-touching components whose ink fills less than this fraction of
+-- their bounding box are treated as page furniture (frames, rules).
+local FRAME_FILL_MAX = 0.10
+-- Components thinner than this fraction of the page are treated as lines.
+local THIN_EDGE_FRAC = 0.02
+
 local function ensureLeptonica()
   if lev then return end
+  -- Pulls in ffi/leptonica_h, which declares PIX/PIXA/BOXA/l_int32.
+  require("ffi/koptcontext")
+  ffi.cdef [[
+BOXA *pixConnCompPixa(PIX *, PIXA **, l_int32);
+l_int32 pixaGetCount(PIXA *);
+PIX *pixaGetPix(PIXA *, l_int32, l_int32);
+void pixaDestroy(PIXA **);
+l_ok pixCountPixels(PIX *, l_int32 *, l_int32 *);
+]]
   lev = ffi.loadlib("leptonica", "6")
 end
 
@@ -37,6 +52,12 @@ local function boxaDestroy(boxa)
   ffi.gc(boxa, nil)
 end
 
+--- @param pixa any
+local function pixaDestroy(pixa)
+  lev.pixaDestroy(ffi.new('PIXA *[1]', pixa))
+  ffi.gc(pixa, nil)
+end
+
 --- @param box any
 local function boxGetGeometry(box)
   local geo = ffi.new('l_int32[4]')
@@ -57,6 +78,38 @@ local function boxaIterBoxes(boxa)
       return box
     end
   end
+end
+
+--- Number of ink pixels of one component.
+--- @param pixa any
+--- @param index integer
+--- @return integer
+local function componentInk(pixa, index)
+  local pix = lev.pixaGetPix(pixa, index, lev.L_CLONE)
+  if pix == nil then return 0 end
+  local count = ffi.new('l_int32[1]')
+  lev.pixCountPixels(pix, count, nil)
+  lev.pixDestroy(ffi.new('PIX *[1]', pix))
+  return tonumber(count[0])
+end
+
+--- Decide whether a component is page content rather than page furniture.
+--- Border-touching components are only dropped when they look like a scan
+--- artifact: a thin line, or a hollow frame whose ink fills little of its
+--- bounding box. Full-bleed artwork is kept.
+--- @return boolean
+local function isContentComponent(pixa, index, bx, by, bw, bh, img_w, img_h,
+    border_max_width, thin_limit, min_content_area)
+  local area = bw * bh
+  if area < min_content_area then return false end
+  local touches_border = (bx <= border_max_width)
+      or (by <= border_max_width)
+      or (bx + bw >= img_w - border_max_width)
+      or (by + bh >= img_h - border_max_width)
+  if not touches_border then return true end
+  if pixa == nil then return true end
+  if bw <= thin_limit or bh <= thin_limit then return false end
+  return componentInk(pixa, index) / area > FRAME_FILL_MAX
 end
 
 --- Detect page content bounds using leptonica connected-component analysis.
@@ -107,12 +160,17 @@ local function enhancedCropBmp(kc)
   local t3 = now_ms()
   if pix_binary == nil then return nil end
 
-  -- Find connected components (bounding boxes only)
-  local bb = _gc_ptr(lev.pixConnCompBB(pix_binary, 8), boxaDestroy)
+  -- Find connected components, keeping the component images so border
+  -- components can be classified by ink density.
+  local pixa_ref = ffi.new("PIXA *[1]")
+  local bb = _gc_ptr(lev.pixConnCompPixa(pix_binary, pixa_ref, 8), boxaDestroy)
   local t5 = now_ms()
   if bb == nil then return nil end
+  local pixa = _gc_ptr(pixa_ref[0], pixaDestroy)
 
   local num_boxes = lev.boxaGetCount(bb)
+  local thin_limit = math.max(border_max_width,
+    math.floor(THIN_EDGE_FRAC * math.max(img_w, img_h)))
 
   -- Filter components
   local min_x, min_y, max_x, max_y = img_w, img_h, 0, 0
@@ -120,25 +178,19 @@ local function enhancedCropBmp(kc)
   local kept = 0
   local idx = 0
   for box in boxaIterBoxes(bb) do
-    idx = idx + 1
     local bx, by, bw, bh = boxGetGeometry(box)
-    local touches_border = (bx <= border_max_width)
-        or (by <= border_max_width)
-        or (bx + bw >= img_w - border_max_width)
-        or (by + bh >= img_h - border_max_width)
-
-    if not touches_border then
-      local area = bw * bh
-      if area >= min_content_area then
-        found_content = true
-        kept = kept + 1
-        if bx < min_x then min_x = bx end
-        if by < min_y then min_y = by end
-        if bx + bw > max_x then max_x = bx + bw end
-        if by + bh > max_y then max_y = by + bh end
-      end
+    if isContentComponent(pixa, idx, bx, by, bw, bh, img_w, img_h,
+        border_max_width, thin_limit, min_content_area) then
+      found_content = true
+      kept = kept + 1
+      if bx < min_x then min_x = bx end
+      if by < min_y then min_y = by end
+      if bx + bw > max_x then max_x = bx + bw end
+      if by + bh > max_y then max_y = by + bh end
     end
+    idx = idx + 1
   end
+  pixaDestroy(pixa)
 
   local t6 = now_ms()
 
@@ -212,23 +264,24 @@ local function getEnhancedPanel(kc, pos)
   local pix_binary = _gc_ptr(lev.pixThresholdToBinary(pixg, threshold), pixDestroy)
   if pix_binary == nil then return nil end
 
-  local bb = _gc_ptr(lev.pixConnCompBB(pix_binary, 8), boxaDestroy)
+  local pixa_ref = ffi.new("PIXA *[1]")
+  local bb = _gc_ptr(lev.pixConnCompPixa(pix_binary, pixa_ref, 8), boxaDestroy)
   if bb == nil then return nil end
+  local pixa = _gc_ptr(pixa_ref[0], pixaDestroy)
+  local thin_limit = math.max(border_max_width,
+    math.floor(THIN_EDGE_FRAC * math.max(img_w, img_h)))
 
   local t0 = now_ms()
 
   local best_dist = math.huge
   local best_box = nil
+  local idx = 0
 
   for box in boxaIterBoxes(bb) do
     local bx, by, bw, bh = boxGetGeometry(box)
 
-    local touches_border = (bx <= border_max_width)
-        or (by <= border_max_width)
-        or (bx + bw >= img_w - border_max_width)
-        or (by + bh >= img_h - border_max_width)
-
-    if not touches_border and bw * bh >= min_content_area then
+    if isContentComponent(pixa, idx, bx, by, bw, bh, img_w, img_h,
+        border_max_width, thin_limit, min_content_area) then
       local cx = bx + bw / 2
       local cy = by + bh / 2
       local dx = pos.x - cx
@@ -242,7 +295,9 @@ local function getEnhancedPanel(kc, pos)
         end
       end
     end
+    idx = idx + 1
   end
+  pixaDestroy(pixa)
 
   local t1 = now_ms()
 

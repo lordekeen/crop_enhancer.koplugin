@@ -1,19 +1,26 @@
 # Crop comparison harness
 
-Runs three auto-crop implementations on the same page bitmap:
+Runs four auto-crop implementations on the same page bitmap:
 
 - `stock` — KOReader's built-in `k2pdfopt_crop_bmp`, called directly from the
   bundled `libk2pdfopt` (same KOPTContext settings KOReader uses: trim=1,
   margin=0.10, 1072x1448 @ 300dpi).
 - `upstream` — `crop_enhancer_detect.lua` as of commit 2121319 (inverts the
   binary image before connected components).
+- `invertfix` — `crop_enhancer_detect.lua` at 71dd1b1 (invert removed, old
+  border filter).
 - `patched` — the current working tree.
 
-`upstream_detect.lua` must be a copy of the pre-patch file:
+The reference files are copies from git history:
 
 ```sh
 git show 2121319:crop_enhancer_detect.lua > bench/upstream_detect.lua
+git show 71dd1b1:crop_enhancer_detect.lua > bench/invertfix_detect.lua
 ```
+
+`prep.py` writes real pages from a directory of images (`SAMPLES_DIR`),
+`synthetic.py` writes the synthetic edge cases (frame, edge band, speckles,
+footer) into `pages/` and `raw/`.
 
 Usage:
 
