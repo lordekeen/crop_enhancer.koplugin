@@ -101,14 +101,11 @@ local function enhancedCropBmp(kc)
   local t2 = now_ms()
   if pixg == nil then return nil end
 
-  -- Threshold -> binary (pixel >= threshold -> 1=bg, < threshold -> 0=content)
+  -- Threshold -> binary: leptonica sets 1 for pixels darker than the
+  -- threshold, so this is already 1=content, 0=background.
   local pix_binary = _gc_ptr(lev.pixThresholdToBinary(pixg, threshold), pixDestroy)
   local t3 = now_ms()
   if pix_binary == nil then return nil end
-
-  -- Invert binary IN-PLACE (content->1, bg->0) -- O(w*h/8) bytes
-  lev.pixInvert(pix_binary, pix_binary)
-  local t4 = now_ms()
 
   -- Find connected components (bounding boxes only)
   local bb = _gc_ptr(lev.pixConnCompBB(pix_binary, 8), boxaDestroy)
@@ -173,8 +170,7 @@ local function enhancedCropBmp(kc)
   dbg("  TIME  bitmap2pix:  %.3f ms", t1 - t0)
   dbg("  TIME  grayscale:   %.3f ms", t2 - t1)
   dbg("  TIME  threshold:   %.3f ms", t3 - t2)
-  dbg("  TIME  invert-bin:  %.3f ms", t4 - t3)
-  dbg("  TIME  conncomp:    %.3f ms", t5 - t4)
+  dbg("  TIME  conncomp:    %.3f ms", t5 - t3)
   dbg("  TIME  filter:      %.3f ms", t6 - t5)
   dbg("  TIME  TOTAL:       %.3f ms", t6 - t0)
   dbg("  RESULT (%.1f,%.1f,%.1f,%.1f)", x0, y0, x1, y1)
@@ -212,10 +208,9 @@ local function getEnhancedPanel(kc, pos)
   end
   if pixg == nil then return nil end
 
+  -- 1=content, 0=background (see enhancedCropBmp above)
   local pix_binary = _gc_ptr(lev.pixThresholdToBinary(pixg, threshold), pixDestroy)
   if pix_binary == nil then return nil end
-
-  lev.pixInvert(pix_binary, pix_binary)
 
   local bb = _gc_ptr(lev.pixConnCompBB(pix_binary, 8), boxaDestroy)
   if bb == nil then return nil end

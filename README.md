@@ -46,9 +46,8 @@ Access via: **Bottom toolbar (crop panel) > Enhanced Crop** or **Tools > Enhance
 ```
 bitmap2pix(kc.src)
   → pixConvertRGBToGrayFast     (32bpp → 8bpp)
-  → pixThresholdToBinary        (grayscale → binary)
-  → pixInvert (in-place)        (content → 1, bg → 0)
-  → pixConnCompBB               (connected components → bounding boxes)
+  → pixThresholdToBinary        (1 = ink, 0 = paper)
+  → pixConnCompBB               (connected components of ink → bounding boxes)
   → filter: discard border-touching and small components
   → merge kept boxes → bbox
 ```

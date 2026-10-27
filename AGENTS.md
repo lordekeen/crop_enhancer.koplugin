@@ -86,11 +86,9 @@ bitmap2pix(kc.src)           WILLUSBITMAP → PIX
   ↓
 pixConvertRGBToGrayFast      32bpp → 8bpp (skip if already 8bpp)
   ↓
-pixThresholdToBinary         grayscale → binary (threshold)
+pixThresholdToBinary         grayscale → binary (1 = ink, 0 = paper)
   ↓
-pixInvert (in-place)         content→1, bg→0   O(w×h/8) bytes
-  ↓
-pixConnCompBB                connected components → BOXA of bounding boxes
+pixConnCompBB                connected components of ink → BOXA of boxes
   ↓
 filter: discard              - border-touching (within border_max_width px)
                              - small (< min_content_area px²)
@@ -136,7 +134,6 @@ merge kept boxes → bbox      + margin (fraction of DPI)
 
 - **No comments in code** unless asked
 - **No per-function `local lev = lev.pixFoo` caching** — LuaJIT already optimizes table lookups; only the library handle `lev` is cached
-- **Binary invert** (`pixInvert` on binary) not grayscale — verified faster on Kindle PW3
 - **`os.clock() * 1000`** for timing (ms). Use `now_ms()` from logger module
 - **`dbg()` respects `debug_log`** setting — reads from `G_reader_settings` each call
 - **ffi cdata types** → `any`/`table` in luaLS annotations (luaLS can't resolve `ffi.cdata*`)
