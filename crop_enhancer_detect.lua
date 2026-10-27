@@ -9,12 +9,6 @@ local loadSetting = settings.loadSetting
 --- @type table
 local lev
 
--- Border-touching components whose ink fills less than this fraction of
--- their bounding box are treated as page furniture (frames, rules).
-local FRAME_FILL_MAX = 0.10
--- Components thinner than this fraction of the page are treated as lines.
-local THIN_EDGE_FRAC = 0.02
-
 local function ensureLeptonica()
   if lev then return end
   -- Pulls in ffi/leptonica_h, which declares PIX/PIXA/BOXA/l_int32.
@@ -99,7 +93,7 @@ end
 --- bounding box. Full-bleed artwork is kept.
 --- @return boolean
 local function isContentComponent(pixa, index, bx, by, bw, bh, img_w, img_h,
-    border_max_width, thin_limit, min_content_area)
+    border_max_width, thin_limit, min_content_area, frame_fill_max)
   local area = bw * bh
   if area < min_content_area then return false end
   local touches_border = (bx <= border_max_width)
@@ -109,7 +103,7 @@ local function isContentComponent(pixa, index, bx, by, bw, bh, img_w, img_h,
   if not touches_border then return true end
   if pixa == nil then return true end
   if bw <= thin_limit or bh <= thin_limit then return false end
-  return componentInk(pixa, index) / area > FRAME_FILL_MAX
+  return componentInk(pixa, index) / area > frame_fill_max
 end
 
 --- Detect page content bounds using leptonica connected-component analysis.
@@ -127,6 +121,8 @@ local function enhancedCropBmp(kc)
   local border_max_width = loadSetting("border_max_width")
   local min_content_area = loadSetting("min_content_area")
   local margin_frac      = loadSetting("margin")
+  local frame_fill_max   = loadSetting("frame_fill_max")
+  local thin_edge_frac   = loadSetting("thin_edge_frac")
 
   local img_w            = kc.src.width
   local img_h            = kc.src.height
@@ -170,7 +166,7 @@ local function enhancedCropBmp(kc)
 
   local num_boxes = lev.boxaGetCount(bb)
   local thin_limit = math.max(border_max_width,
-    math.floor(THIN_EDGE_FRAC * math.max(img_w, img_h)))
+    math.floor(thin_edge_frac * math.max(img_w, img_h)))
 
   -- Filter components
   local min_x, min_y, max_x, max_y = img_w, img_h, 0, 0
@@ -180,7 +176,7 @@ local function enhancedCropBmp(kc)
   for box in boxaIterBoxes(bb) do
     local bx, by, bw, bh = boxGetGeometry(box)
     if isContentComponent(pixa, idx, bx, by, bw, bh, img_w, img_h,
-        border_max_width, thin_limit, min_content_area) then
+        border_max_width, thin_limit, min_content_area, frame_fill_max) then
       found_content = true
       kept = kept + 1
       if bx < min_x then min_x = bx end
@@ -242,6 +238,8 @@ local function getEnhancedPanel(kc, pos)
   local threshold        = loadSetting("threshold")
   local border_max_width = loadSetting("border_max_width")
   local min_content_area = loadSetting("min_content_area")
+  local frame_fill_max   = loadSetting("frame_fill_max")
+  local thin_edge_frac   = loadSetting("thin_edge_frac")
 
   local img_w = kc.src.width
   local img_h = kc.src.height
@@ -269,7 +267,7 @@ local function getEnhancedPanel(kc, pos)
   if bb == nil then return nil end
   local pixa = _gc_ptr(pixa_ref[0], pixaDestroy)
   local thin_limit = math.max(border_max_width,
-    math.floor(THIN_EDGE_FRAC * math.max(img_w, img_h)))
+    math.floor(thin_edge_frac * math.max(img_w, img_h)))
 
   local t0 = now_ms()
 
@@ -281,7 +279,7 @@ local function getEnhancedPanel(kc, pos)
     local bx, by, bw, bh = boxGetGeometry(box)
 
     if isContentComponent(pixa, idx, bx, by, bw, bh, img_w, img_h,
-        border_max_width, thin_limit, min_content_area) then
+        border_max_width, thin_limit, min_content_area, frame_fill_max) then
       local cx = bx + bw / 2
       local cy = by + bh / 2
       local dx = pos.x - cx

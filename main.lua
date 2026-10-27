@@ -61,6 +61,8 @@ function CropEnhancer:init()
     if c.crop_threshold == nil then c.crop_threshold = loadSetting("threshold") end
     if c.crop_border_max_width == nil then c.crop_border_max_width = loadSetting("border_max_width") end
     if c.crop_min_content_area == nil then c.crop_min_content_area = loadSetting("min_content_area") end
+    if c.crop_frame_fill_max == nil then c.crop_frame_fill_max = loadSetting("frame_fill_max") end
+    if c.crop_thin_edge_frac == nil then c.crop_thin_edge_frac = loadSetting("thin_edge_frac") end
     if c.crop_margin == nil then c.crop_margin = loadSetting("margin") end
 
     dbg("  configurable.crop_enhancer=%s enabled=%s",
@@ -279,6 +281,54 @@ function CropEnhancer:patchKoptOptions()
   })
 
   table.insert(crop_panel.options, {
+    name = "crop_frame_fill_max",
+    name_text = _("Frame Fill"),
+    toggle = { "0%", "2%", "5%", "10%", "15%", "20%" },
+    values = { 0, 0.02, 0.05, 0.10, 0.15, 0.20 },
+    enabled_func = function(configurable)
+      return configurable.crop_enhancer == 1
+    end,
+    default_value = SETTINGS_DEFAULTS.frame_fill_max,
+    event = "CropEnhancerFrameFill",
+    args = { 0, 0.02, 0.05, 0.10, 0.15, 0.20 },
+    more_options = true,
+    more_options_param = {
+      unit = "",
+      value_step = 0.01,
+      value_hold_step = 0.05,
+      value_min = 0,
+      value_max = 0.50,
+      precision = "%.2f",
+    },
+    name_text_hold_callback = optionsutil.showValues,
+    help_text = _([[Edge-touching components whose ink fills less than this share of their bounding box are treated as page frames or rules.]]),
+  })
+
+  table.insert(crop_panel.options, {
+    name = "crop_thin_edge_frac",
+    name_text = _("Thin Edge"),
+    toggle = { "0%", "1%", "2%", "4%", "8%" },
+    values = { 0, 0.01, 0.02, 0.04, 0.08 },
+    enabled_func = function(configurable)
+      return configurable.crop_enhancer == 1
+    end,
+    default_value = SETTINGS_DEFAULTS.thin_edge_frac,
+    event = "CropEnhancerThinEdge",
+    args = { 0, 0.01, 0.02, 0.04, 0.08 },
+    more_options = true,
+    more_options_param = {
+      unit = "",
+      value_step = 0.01,
+      value_hold_step = 0.02,
+      value_min = 0,
+      value_max = 0.20,
+      precision = "%.2f",
+    },
+    name_text_hold_callback = optionsutil.showValues,
+    help_text = _([[Edge-touching components thinner than this share of the page are treated as lines.]]),
+  })
+
+  table.insert(crop_panel.options, {
     name = "crop_margin",
     name_text = _("Margin"),
     toggle = { "0%", "2%", "5%", "10%", "15%", "20%" },
@@ -313,6 +363,10 @@ function CropEnhancer:onDispatcherRegisterActions()
     { category = "none", event = "CropEnhancerBorderWidth", title = _("Crop Border Width"), general = true })
   Dispatcher:registerAction("crop_enhancer_min_area",
     { category = "none", event = "CropEnhancerMinArea", title = _("Crop Min Area"), general = true })
+  Dispatcher:registerAction("crop_enhancer_frame_fill",
+    { category = "none", event = "CropEnhancerFrameFill", title = _("Crop Frame Fill"), general = true })
+  Dispatcher:registerAction("crop_enhancer_thin_edge",
+    { category = "none", event = "CropEnhancerThinEdge", title = _("Crop Thin Edge"), general = true })
   Dispatcher:registerAction("crop_enhancer_margin",
     { category = "none", event = "CropEnhancerMargin", title = _("Crop Margin"), general = true })
 end
@@ -353,6 +407,22 @@ function CropEnhancer:onCropEnhancerMinArea(args)
     self.ui.document.configurable.crop_min_content_area = args
   end
   dbg("min_content_area -> %d", args)
+end
+
+function CropEnhancer:onCropEnhancerFrameFill(args)
+  saveSetting("frame_fill_max", args)
+  if self.ui.document and self.ui.document.configurable then
+    self.ui.document.configurable.crop_frame_fill_max = args
+  end
+  dbg("frame_fill_max -> %.2f", args)
+end
+
+function CropEnhancer:onCropEnhancerThinEdge(args)
+  saveSetting("thin_edge_frac", args)
+  if self.ui.document and self.ui.document.configurable then
+    self.ui.document.configurable.crop_thin_edge_frac = args
+  end
+  dbg("thin_edge_frac -> %.2f", args)
 end
 
 function CropEnhancer:onCropEnhancerMargin(args)
@@ -456,6 +526,64 @@ function CropEnhancer:addToMainMenu(menu_items)
             ok_always_enabled = true,
             callback = function(spin)
               saveSetting("min_content_area", spin.value)
+              if touchmenu_instance then touchmenu_instance:updateItems() end
+            end,
+          })
+        end,
+        keep_menu_open = true,
+      },
+      {
+        text_func = function()
+          return T(_("Frame Fill: %1%"), math.floor(loadSetting("frame_fill_max") * 100))
+        end,
+        enabled_func = function()
+          return crop_enhancer_enabled
+        end,
+        callback = function(touchmenu_instance)
+          UIManager:show(SpinWidget:new {
+            title_text = _("Frame Fill"),
+            info_text = _("Edge-touching components whose ink fills less than this share of their box are treated as frames."),
+            value = math.floor(loadSetting("frame_fill_max") * 100),
+            default_value = math.floor(SETTINGS_DEFAULTS.frame_fill_max * 100),
+            value_min = 0, value_max = 50,
+            value_step = 1, value_hold_step = 5,
+            unit = "%", precision = "%1d",
+            ok_always_enabled = true,
+            callback = function(spin)
+              local value = spin.value / 100
+              saveSetting("frame_fill_max", value)
+              if self.ui.document and self.ui.document.configurable then
+                self.ui.document.configurable.crop_frame_fill_max = value
+              end
+              if touchmenu_instance then touchmenu_instance:updateItems() end
+            end,
+          })
+        end,
+        keep_menu_open = true,
+      },
+      {
+        text_func = function()
+          return T(_("Thin Edge: %1%"), math.floor(loadSetting("thin_edge_frac") * 100))
+        end,
+        enabled_func = function()
+          return crop_enhancer_enabled
+        end,
+        callback = function(touchmenu_instance)
+          UIManager:show(SpinWidget:new {
+            title_text = _("Thin Edge"),
+            info_text = _("Edge-touching components thinner than this share of the page are treated as lines."),
+            value = math.floor(loadSetting("thin_edge_frac") * 100),
+            default_value = math.floor(SETTINGS_DEFAULTS.thin_edge_frac * 100),
+            value_min = 0, value_max = 20,
+            value_step = 1, value_hold_step = 5,
+            unit = "%", precision = "%1d",
+            ok_always_enabled = true,
+            callback = function(spin)
+              local value = spin.value / 100
+              saveSetting("thin_edge_frac", value)
+              if self.ui.document and self.ui.document.configurable then
+                self.ui.document.configurable.crop_thin_edge_frac = value
+              end
               if touchmenu_instance then touchmenu_instance:updateItems() end
             end,
           })

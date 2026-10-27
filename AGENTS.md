@@ -92,8 +92,9 @@ pixConnCompPixa              ink components (boxes + images)
   ↓
 filter: drop                 - small (< min_content_area px²)
   ↓                            - edge-touching and either thin
-                               (<= 2% of page) or hollow (ink fill
-                               <= 10% of the bounding box)
+                               (<= thin_edge_frac of page) or
+                               hollow (ink fill <= frame_fill_max
+                               of the bounding box)
   ↓
 merge kept boxes → bbox      + margin (fraction of DPI)
 ```
@@ -130,6 +131,8 @@ merge kept boxes → bbox      + margin (fraction of DPI)
 | `CropEnhancerThreshold` | `onCropEnhancerThreshold` | Save threshold |
 | `CropEnhancerBorderWidth` | `onCropEnhancerBorderWidth` | Save border_max_width |
 | `CropEnhancerMinArea` | `onCropEnhancerMinArea` | Save min_content_area |
+| `CropEnhancerFrameFill` | `onCropEnhancerFrameFill` | Save frame_fill_max |
+| `CropEnhancerThinEdge` | `onCropEnhancerThinEdge` | Save thin_edge_frac |
 | `CropEnhancerMargin` | `onCropEnhancerMargin` | Save margin |
 
 ## Conventions

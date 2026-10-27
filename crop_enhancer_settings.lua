@@ -3,12 +3,16 @@
 --- @field border_max_width number  Components within this many px of edge are border
 --- @field min_content_area number  Minimum bounding-box area to count as content
 --- @field margin           number  Extra margin around detected content (fraction of DPI)
+--- @field frame_fill_max   number  Edge-touching components below this ink/bbox ratio are page frames
+--- @field thin_edge_frac   number  Edge-touching components thinner than this page fraction are lines
 --- @field debug_log        boolean Enable debug logging
 local SETTINGS_DEFAULTS = {
   threshold = 180,
   border_max_width = 5,
   min_content_area = 50,
   margin = 0.05,
+  frame_fill_max = 0.10,
+  thin_edge_frac = 0.02,
   debug_log = false,
 }
 
