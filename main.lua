@@ -253,7 +253,7 @@ function CropEnhancer:patchKoptOptions()
       precision = "%d",
     },
     name_text_hold_callback = optionsutil.showValues,
-    help_text = _([[Components within this many pixels of the edge are treated as border.]]),
+    help_text = _([[Distance from the page edge that is treated as touching it.]]),
   })
 
   table.insert(crop_panel.options, {
@@ -494,7 +494,7 @@ function CropEnhancer:addToMainMenu(menu_items)
         callback = function(touchmenu_instance)
           UIManager:show(SpinWidget:new {
             title_text = _("Border Max Width"),
-            info_text = _("Components within this many pixels of the edge are treated as border."),
+            info_text = _("Distance from the page edge that is treated as touching it."),
             value = loadSetting("border_max_width"),
             default_value = SETTINGS_DEFAULTS.border_max_width,
             value_min = 0, value_max = 30,
