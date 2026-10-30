@@ -36,7 +36,7 @@ koreader/plugins/crop_enhancer.koplugin/
 | Threshold | 180 | Grayscale threshold (0-255). Pixels below this are considered content. |
 | Border max width | 5 | Distance from the page edge that counts as touching it. |
 | Min content area | 50 | Minimum bounding-box area (px²) to count as content. |
-| Frame fill | 0.10 | Edge-touching components whose ink fills less than this share of their bounding box are page frames. |
+| Frame fill | 0.10 | Edge-touching components whose ink fills less than this share of their bounding box are page frames. Capped at 0.20. |
 | Thin edge | 0.02 | Edge-touching components thinner than this share of the page are lines. |
 | Margin | 0.05 | Extra margin around detected content (fraction of DPI). |
 | Debug log | off | Print timing and pipeline details to the log. |
@@ -62,6 +62,11 @@ page furniture: touching the page edge *and* either a solid line thinner than
 `thin_edge_frac` of the page, or a hollow frame whose ink fills less than
 `frame_fill_max` of its bounding box. Full-bleed artwork touches the edge too,
 but it is dense, so it is kept; thin text-like components are kept as well.
+
+`frame_fill_max` stops at 0.20 because body text that reaches the page edge has
+about a quarter of its bounding box covered in ink: past that point the filter
+starts cutting paragraphs instead of frames. The bench harness measures the
+trade-off — see `bench/README.md`.
 
 ### Auto-crop (`getAutoBBox`)
 

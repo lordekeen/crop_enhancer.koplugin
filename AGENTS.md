@@ -14,7 +14,7 @@ Target device: Kindle PW3 (Cortex-A9 1GHz, 512MB RAM). Performance matters.
 crop_enhancer.koplugin/
 ├── _meta.lua                    Plugin metadata (fullname, version, description)
 ├── crop_enhancer_info.lua       Version, author, GitHub URL
-├── crop_enhancer_settings.lua   SETTINGS_DEFAULTS, loadSetting, saveSetting
+├── crop_enhancer_settings.lua   SETTINGS_DEFAULTS, SETTINGS_LIMITS, loadSetting, saveSetting
 ├── crop_enhancer_logger.lua     dbg() (respects debug_log), now_ms()
 ├── crop_enhancer_detect.lua     Leptonica pipeline: bitmap2pix → threshold → conncomp → bbox
 ├── crop_enhancer_i18n.lua       Lazy-loading translations from l10n/<lang>.lua
@@ -58,15 +58,19 @@ in `base/ffi/koptcontext.lua:81` creates a C metatype at line 595 — invisible 
 - Called by `ReaderKoptListener` during page zoom/scroll
 - Has access to `doc`, `pageno`, and can create `KOPTContext`
 
-### Fallback chain (`main.lua:90-98`)
+### Fallback chain (`main.lua`)
 
 ```
-enhancedCropBmp(kc)          -- leptonica connected components
+enhancedCropBmp(kc)          -- leptonica connected components, wrapped in pcall
   ↓ nil (no content found)
 kc:getAutoBBox()             -- original KOPTContext method
   ↓ nil (too small)
 Document.getPageBBox(doc)    -- KOReader fallback
 ```
+
+An error thrown inside `enhancedCropBmp` / `getEnhancedPanel` is caught by `pcall`,
+latches `enhanced_failed`, and skips straight to the original cropper for the rest
+of the session. Toggling Enhanced Crop off and on clears the latch.
 
 ### Settings flow
 

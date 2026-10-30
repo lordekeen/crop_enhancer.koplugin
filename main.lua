@@ -12,8 +12,8 @@ local _ = i18n.translate
 local detect = require("crop_enhancer_detect")
 local enhancedCropBmp, getEnhancedPanel = detect.enhancedCropBmp, detect.getEnhancedPanel
 local settings = require("crop_enhancer_settings")
-local loadSetting, saveSetting, SETTINGS_DEFAULTS = settings.loadSetting, settings.saveSetting,
-    settings.SETTINGS_DEFAULTS
+local loadSetting, saveSetting, SETTINGS_DEFAULTS, SETTINGS_LIMITS = settings.loadSetting,
+    settings.saveSetting, settings.SETTINGS_DEFAULTS, settings.SETTINGS_LIMITS
 
 local logger = require("crop_enhancer_logger")
 local now_ms, dbg = logger.now_ms, logger.dbg
@@ -31,6 +31,7 @@ local crop_enhancer_enabled = true
 local origGetAutoBBox = nil
 local patched = false
 local patched_panel = false
+local enhanced_failed = false
 
 --- Effective state for a document. The per-document configurable is loaded
 --- after this plugin's init(), so read it at call time instead of trusting
@@ -76,7 +77,7 @@ function CropEnhancer:init()
       function KoptInterface:getAutoBBox(doc, pageno)
         local enabled = cropEnhancerEnabled(doc)
         dbg("getAutoBBox enabled=%s", tostring(enabled))
-        if not enabled then
+        if not enabled or enhanced_failed then
           return origGetAutoBBox(self, doc, pageno)
         end
 
@@ -100,7 +101,12 @@ function CropEnhancer:init()
         page:getPagePix(kc, doc.render_mode, doc.configurable.background_cleanup)
         local t_pix = now_ms()
 
-        local x0, y0, x1, y1 = enhancedCropBmp(kc)
+        local ok, x0, y0, x1, y1 = pcall(enhancedCropBmp, kc)
+        if not ok then
+          dbg("enhancedCropBmp failed, falling back: %s", tostring(x0))
+          enhanced_failed = true
+          x0, y0, x1, y1 = nil, nil, nil, nil
+        end
         local t_crop = now_ms()
 
         local w, h = native_size.w, native_size.h
@@ -141,7 +147,7 @@ function CropEnhancer:init()
     if KoptInterface and KoptInterface.getPanelFromPage then
       local origGetPanelFromPage = KoptInterface.getPanelFromPage
       function KoptInterface:getPanelFromPage(doc, pageno, pos)
-        if not cropEnhancerEnabled(doc) then
+        if not cropEnhancerEnabled(doc) or enhanced_failed then
           return origGetPanelFromPage(self, doc, pageno, pos)
         end
 
@@ -152,7 +158,12 @@ function CropEnhancer:init()
         local page = doc._document:openPage(pageno)
         page:getPagePix(kc, doc.render_mode, doc.configurable.background_cleanup)
 
-        local panel = getEnhancedPanel(kc, pos)
+        local ok, panel = pcall(getEnhancedPanel, kc, pos)
+        if not ok then
+          dbg("getEnhancedPanel failed, falling back: %s", tostring(panel))
+          enhanced_failed = true
+          panel = nil
+        end
         page:close()
         kc:free()
 
@@ -188,11 +199,16 @@ function CropEnhancer:patchKoptOptions()
       break
     end
   end
-  if not crop_panel then return end
+  if not crop_panel then
+    dbg("patchKoptOptions: crop panel not found")
+    return
+  end
 
   for _, opt in ipairs(crop_panel.options) do
     if opt.name == "crop_enhancer" then return end
   end
+
+  dbg("patchKoptOptions: injecting options into appbar.crop")
 
   table.insert(crop_panel.options, {
     name = "crop_enhancer",
@@ -295,7 +311,7 @@ function CropEnhancer:patchKoptOptions()
       value_step = 0.01,
       value_hold_step = 0.05,
       value_min = 0,
-      value_max = 0.50,
+      value_max = SETTINGS_LIMITS.frame_fill_max,
       precision = "%.2f",
     },
     name_text_hold_callback = optionsutil.showValues,
@@ -378,6 +394,7 @@ function CropEnhancer:onCropEnhancerToggle(args)
     crop_enhancer_enabled = not crop_enhancer_enabled
   end
   dbg("toggle -> %s", tostring(crop_enhancer_enabled))
+  if crop_enhancer_enabled then enhanced_failed = false end
   if self.ui.document and self.ui.document.configurable then
     self.ui.document.configurable.crop_enhancer = crop_enhancer_enabled and 1 or 0
   end
@@ -432,8 +449,10 @@ function CropEnhancer:onCropEnhancerMargin(args)
 end
 
 function CropEnhancer:addToMainMenu(menu_items)
+  dbg("addToMainMenu")
   menu_items.crop_enhancer = {
     text = _("Enhanced Crop Settings"),
+    sorting_hint = "tools",
     sub_item_table = {
       {
         text = _("Enhanced Crop"),
@@ -541,9 +560,10 @@ function CropEnhancer:addToMainMenu(menu_items)
           UIManager:show(SpinWidget:new {
             title_text = _("Frame Fill"),
             info_text = _("Edge-touching components whose ink fills less than this share of their box are treated as frames."),
-            value = math.floor(loadSetting("frame_fill_max") * 100),
+            value = math.floor(math.min(loadSetting("frame_fill_max"),
+              SETTINGS_LIMITS.frame_fill_max) * 100),
             default_value = math.floor(SETTINGS_DEFAULTS.frame_fill_max * 100),
-            value_min = 0, value_max = 50,
+            value_min = 0, value_max = math.floor(SETTINGS_LIMITS.frame_fill_max * 100),
             value_step = 1, value_hold_step = 5,
             unit = "%", precision = "%1d",
             ok_always_enabled = true,
@@ -617,14 +637,14 @@ function CropEnhancer:addToMainMenu(menu_items)
         text = _("About"),
         callback = function()
           local InfoMessage = require("ui/widget/infomessage")
-          local info = require("crop_enhancer_info")
+          local plugin_info = require("crop_enhancer_info")
           UIManager:show(InfoMessage:new {
             title = _("Enhanced Crop"),
             text = T(_("%1\n\nVersion: %2\nAuthor: %3\nGitHub: %4"),
               _("Enhanced Crop — Connected component analysis for better page trimming."),
-              info.version,
-              info.author,
-              info.github),
+              plugin_info.version,
+              plugin_info.author,
+              plugin_info.github),
           })
         end,
       },

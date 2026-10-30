@@ -4,6 +4,7 @@ local settings = require("crop_enhancer_settings")
 
 local now_ms, dbg = logger.now_ms, logger.dbg
 local loadSetting = settings.loadSetting
+local SETTINGS_LIMITS = settings.SETTINGS_LIMITS
 
 --- Leptonica library handle (loaded once, LuaJIT caches table lookups)
 --- @type table
@@ -125,7 +126,7 @@ local function enhancedCropBmp(kc)
   local border_max_width = loadSetting("border_max_width")
   local min_content_area = loadSetting("min_content_area")
   local margin_frac      = loadSetting("margin")
-  local frame_fill_max   = loadSetting("frame_fill_max")
+  local frame_fill_max   = math.min(loadSetting("frame_fill_max"), SETTINGS_LIMITS.frame_fill_max)
   local thin_edge_frac   = loadSetting("thin_edge_frac")
 
   local img_w            = kc.src.width
@@ -238,7 +239,7 @@ local function getEnhancedPanel(kc, pos)
   local threshold        = loadSetting("threshold")
   local border_max_width = loadSetting("border_max_width")
   local min_content_area = loadSetting("min_content_area")
-  local frame_fill_max   = loadSetting("frame_fill_max")
+  local frame_fill_max   = math.min(loadSetting("frame_fill_max"), SETTINGS_LIMITS.frame_fill_max)
   local thin_edge_frac   = loadSetting("thin_edge_frac")
 
   local img_w = kc.src.width

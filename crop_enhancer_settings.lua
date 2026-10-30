@@ -16,6 +16,13 @@ local SETTINGS_DEFAULTS = {
   debug_log = false,
 }
 
+--- Hard upper bounds, enforced by the detector as well as the widgets.
+--- Frame fill above 0.20 starts dropping real body text that reaches the page
+--- edge; at 0.50 the bench corpus loses whole margins (see bench/README.md).
+local SETTINGS_LIMITS = {
+  frame_fill_max = 0.20,
+}
+
 --- @param key string  Setting key
 --- @return number
 local function loadSetting(key)
@@ -32,6 +39,7 @@ end
 
 return {
   SETTINGS_DEFAULTS = SETTINGS_DEFAULTS,
+  SETTINGS_LIMITS = SETTINGS_LIMITS,
   loadSetting = loadSetting,
   saveSetting = saveSetting,
 }
