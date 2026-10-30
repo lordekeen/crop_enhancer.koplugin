@@ -10,8 +10,19 @@ local C = ffi.C
 local KOPTContext = require("ffi/koptcontext")
 local k2pdfopt = KOPTContext.k2pdfopt
 
+local REPEAT = tonumber(os.getenv("CE_REPEAT") or "1")
+
+local overrides = {}
+for pair in (os.getenv("CE_SETTINGS") or ""):gmatch("[^,]+") do
+  local key, value = pair:match("^%s*([%w_]+)%s*=%s*([%d%.]+)%s*$")
+  if key then overrides[key] = tonumber(value) end
+end
+
 G_reader_settings = {
-  readSetting = function(_, _, default) return default end,
+  readSetting = function(_, key, default)
+    if key == "crop_enhancer" then return overrides end
+    return default
+  end,
   saveSetting = function() end,
 }
 G_defaults = G_reader_settings
@@ -63,23 +74,36 @@ local function emit(page, algo, ms, x0, y0, x1, y1)
   end
 end
 
+local function median(times)
+  table.sort(times)
+  return times[math.floor((#times + 1) / 2)]
+end
+
 for name in arg[1]:gmatch("[^,]+") do
   local data, w, h = readGray(HARNESS.."/raw/"..name..".gray")
 
-  local kc = newCtx(data, w, h)
-  local t0 = now_ms()
-  k2pdfopt.k2pdfopt_crop_bmp(kc)
-  local t1 = now_ms()
-  local bb = kc.bbox
-  emit(name, "stock", t1 - t0, bb.x0, bb.y0, bb.x1, bb.y1)
-  kc:free()
+  do
+    local times, box = {}, {}
+    for _ = 1, REPEAT do
+      local kc = newCtx(data, w, h)
+      local t0 = now_ms()
+      k2pdfopt.k2pdfopt_crop_bmp(kc)
+      times[#times + 1] = now_ms() - t0
+      box = { kc.bbox.x0, kc.bbox.y0, kc.bbox.x1, kc.bbox.y1 }
+      kc:free()
+    end
+    emit(name, "stock", median(times), box[1], box[2], box[3], box[4])
+  end
 
   for _, variant in ipairs({ { "upstream", upstream }, { "invertfix", invertfix }, { "patched", fixed } }) do
-    local kc2 = newCtx(data, w, h)
-    local t2 = now_ms()
-    local x0, y0, x1, y1 = variant[2].enhancedCropBmp(kc2)
-    local t3 = now_ms()
-    emit(name, variant[1], t3 - t2, x0, y0, x1, y1)
-    kc2:free()
+    local times, r = {}, {}
+    for _ = 1, REPEAT do
+      local kc2 = newCtx(data, w, h)
+      local t2 = now_ms()
+      r = { variant[2].enhancedCropBmp(kc2) }
+      times[#times + 1] = now_ms() - t2
+      kc2:free()
+    end
+    emit(name, variant[1], median(times), r[1], r[2], r[3], r[4])
   end
 end

@@ -1,2 +1,8 @@
 __pycache__/
 *.pyc
+
+samples/
+pages/
+raw/
+results*.txt
+compare*.png

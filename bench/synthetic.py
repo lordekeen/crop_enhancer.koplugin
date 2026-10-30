@@ -1,15 +1,24 @@
 """Generate the synthetic edge-case pages used by the crop harness."""
+import os
+import struct
+import sys
+
 from PIL import Image, ImageDraw
-import os, struct
+
+PAGES = "pages"
+RAW = "raw"
 
 
-def save(im, name, pages="pages", raw="raw"):
-    os.makedirs(pages, exist_ok=True)
-    os.makedirs(raw, exist_ok=True)
-    im.save(os.path.join(pages, name + ".png"))
-    with open(os.path.join(raw, name + ".gray"), "wb") as f:
-        f.write(struct.pack("<II", im.width, im.height))
-        f.write(im.tobytes())
+def save(im, name):
+    try:
+        os.makedirs(PAGES, exist_ok=True)
+        os.makedirs(RAW, exist_ok=True)
+        im.save(os.path.join(PAGES, name + ".png"))
+        with open(os.path.join(RAW, name + ".gray"), "wb") as f:
+            f.write(struct.pack("<II", im.width, im.height))
+            f.write(im.tobytes())
+    except OSError as exc:
+        sys.exit(f"failed to write {name}: {exc}")
     print(name, im.size)
 
 
@@ -51,3 +60,14 @@ text_block(draw)
 for x in range(100, 420, 18):
     draw.rectangle([x, 1300, x + 8, 1310], fill=30)
 save(page, "FOOTER")
+
+# A paragraph that starts on the top edge and stays one connected component:
+# the bars are fused by a vertical stem, so the block is far thicker than
+# thin_edge_frac and the frame-fill branch decides. At ~0.27 ink fill it is
+# kept at the 0.20 cap and would be dropped without the cap.
+page = Image.new("L", (1000, 1400), 255)
+draw = ImageDraw.Draw(page)
+for y in range(0, 620, 48):
+    draw.rectangle([40, y, 960, y + 12], fill=20)
+draw.rectangle([498, 0, 501, 588], fill=20)
+save(page, "EDGEPARA")
