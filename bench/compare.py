@@ -1,11 +1,21 @@
 from PIL import Image, ImageDraw
 import os, sys, collections
+from typing import NamedTuple
 
 RESULTS = sys.argv[1] if len(sys.argv) > 1 else "results.txt"
 PAGES = sys.argv[2] if len(sys.argv) > 2 else "pages"
 
+
+def read_lines(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read().splitlines()
+    except OSError as exc:
+        sys.exit(f"cannot read {path}: {exc}")
+
+
 res = collections.defaultdict(dict)
-for line in open(RESULTS):
+for line in read_lines(RESULTS):
     p = line.strip().split("|")
     if len(p) < 3: continue
     page, algo = p[0], p[1]
@@ -20,6 +30,14 @@ def ink_bbox(im, thr=200):
     # bbox of pixels darker than thr
     mask = im.point(lambda v: 255 if v < thr else 0)
     return mask.getbbox()  # (l,t,r,b) exclusive
+class Metrics(NamedTuple):
+    box: tuple[int, int, int, int]
+    ms: float
+    cut_frac: float
+    kept_area: float
+    ink_density: float
+
+
 def metrics(im, box):
     W,H = im.size
     if box is None: return None
@@ -32,11 +50,10 @@ def metrics(im, box):
     cink = crop.point(lambda v: 255 if v < 200 else 0)
     ink_in = sum(1 for v in cink.get_flattened_data() if v)
     area = (x1-x0)*(y1-y0)
-    return dict(box=(x0,y0,x1,y1), ms=ms,
-                cut_frac=(total_ink-ink_in)/max(1,total_ink),
-                kept_area=area/(W*H),
-                ink_density=ink_in/max(1,area),
-                iou=None)
+    return Metrics(box=(x0,y0,x1,y1), ms=ms,
+                   cut_frac=(total_ink-ink_in)/max(1,total_ink),
+                   kept_area=area/(W*H),
+                   ink_density=ink_in/max(1,area))
 
 def iou(a,b):
     if not a or not b: return 0.0
@@ -54,10 +71,10 @@ for page in res:
     for algo in ALGOS:
         box = res[page].get(algo)
         m = metrics(im, box)
-        if not m:
+        if m is None:
             print(f"{page:14} {algo:9} {'nil':28}"); continue
-        x0,y0,x1,y1 = m["box"]
-        print(f"{page:14} {algo:9} {f'({x0},{y0})-({x1},{y1})':28} {m['kept_area']*100:6.1f} {m['cut_frac']*100:9.2f} {m['ink_density']:9.3f} {iou(m['box'],truth):6.3f} {m['ms']:6.1f}")
+        x0,y0,x1,y1 = m.box
+        print(f"{page:14} {algo:9} {f'({x0},{y0})-({x1},{y1})':28} {m.kept_area*100:6.1f} {m.cut_frac*100:9.2f} {m.ink_density:9.3f} {iou(m.box,truth):6.3f} {m.ms:6.1f}")
     print()
 
 # visual sheet
@@ -86,7 +103,7 @@ sheet=Image.new("RGB",(cw, len(rows)*(TH+24)),(255,255,255))
 d=ImageDraw.Draw(sheet)
 y=0
 for page,row in rows:
-    d.text((2,y+4), page+"   [orig+boxes | stock(red) | upstream(blue) | patched(green)]", fill=0)
+    d.text((2,y+4), page+"   [orig+boxes | stock(red) | upstream(blue) | invertfix(orange) | patched(green)]", fill=0)
     y+=20
     x=0
     for t in row:

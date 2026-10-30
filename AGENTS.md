@@ -85,6 +85,17 @@ KOPTContext fields                   read by enhancedCropBmp()
 
 Settings are synced: `G_reader_settings` ↔ `configurable` on init and every event handler.
 
+The detector reads only `G_reader_settings` — all six numeric settings are global
+by design, as they always have been. The `configurable` mirror exists so the crop
+panel and ConfigDialog widgets can render their current position, not as a second
+source of truth for detection.
+
+Dispatcher actions for the numeric settings are registered as `absolutenumber`
+with `min`/`max`/`step` mirroring the widgets, so a bound gesture carries a value.
+With `category = "none"` the event arrives with `args == nil`, and the handlers
+would write `nil` over the saved setting. Every numeric handler also returns
+early unless `args` is a number.
+
 ### Leptonica pipeline (`crop_enhancer_detect.lua`)
 
 ```

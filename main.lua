@@ -102,7 +102,8 @@ function CropEnhancer:init()
         local t_pix = now_ms()
 
         local ok, x0, y0, x1, y1 = pcall(enhancedCropBmp, kc)
-        if not ok then
+        local degraded = not ok
+        if degraded then
           dbg("enhancedCropBmp failed, falling back: %s", tostring(x0))
           enhanced_failed = true
           x0, y0, x1, y1 = nil, nil, nil, nil
@@ -122,7 +123,9 @@ function CropEnhancer:init()
           end
         end
 
-        DocCache:insert(hash, CacheItem:new { autobbox = bbox, size = 160 })
+        if not degraded then
+          DocCache:insert(hash, CacheItem:new { autobbox = bbox, size = 160 })
+        end
         page:close()
         kc:free()
 
@@ -372,17 +375,23 @@ function CropEnhancer:onDispatcherRegisterActions()
   Dispatcher:registerAction("crop_enhancer_toggle",
     { category = "none", event = "CropEnhancerToggle", title = _("Toggle Enhanced Crop"), general = true })
   Dispatcher:registerAction("crop_enhancer_threshold",
-    { category = "none", event = "CropEnhancerThreshold", title = _("Crop Threshold"), general = true })
+    { category = "absolutenumber", event = "CropEnhancerThreshold", title = _("Crop Threshold"),
+      min = 50, max = 250, step = 1, general = true })
   Dispatcher:registerAction("crop_enhancer_border_width",
-    { category = "none", event = "CropEnhancerBorderWidth", title = _("Crop Border Width"), general = true })
+    { category = "absolutenumber", event = "CropEnhancerBorderWidth", title = _("Crop Border Width"),
+      min = 0, max = 30, step = 1, general = true })
   Dispatcher:registerAction("crop_enhancer_min_area",
-    { category = "none", event = "CropEnhancerMinArea", title = _("Crop Min Area"), general = true })
+    { category = "absolutenumber", event = "CropEnhancerMinArea", title = _("Crop Min Area"),
+      min = 0, max = 500, step = 10, general = true })
   Dispatcher:registerAction("crop_enhancer_frame_fill",
-    { category = "none", event = "CropEnhancerFrameFill", title = _("Crop Frame Fill"), general = true })
+    { category = "absolutenumber", event = "CropEnhancerFrameFill", title = _("Crop Frame Fill"),
+      min = 0, max = SETTINGS_LIMITS.frame_fill_max, step = 0.01, general = true })
   Dispatcher:registerAction("crop_enhancer_thin_edge",
-    { category = "none", event = "CropEnhancerThinEdge", title = _("Crop Thin Edge"), general = true })
+    { category = "absolutenumber", event = "CropEnhancerThinEdge", title = _("Crop Thin Edge"),
+      min = 0, max = 0.20, step = 0.01, general = true })
   Dispatcher:registerAction("crop_enhancer_margin",
-    { category = "none", event = "CropEnhancerMargin", title = _("Crop Margin"), general = true })
+    { category = "absolutenumber", event = "CropEnhancerMargin", title = _("Crop Margin"),
+      min = 0, max = 0.30, step = 0.01, general = true })
 end
 
 function CropEnhancer:onCropEnhancerToggle(args)
@@ -401,6 +410,7 @@ function CropEnhancer:onCropEnhancerToggle(args)
 end
 
 function CropEnhancer:onCropEnhancerThreshold(args)
+  if type(args) ~= "number" then return end
   saveSetting("threshold", args)
   if self.ui.document and self.ui.document.configurable then
     self.ui.document.configurable.crop_threshold = args
@@ -409,6 +419,7 @@ function CropEnhancer:onCropEnhancerThreshold(args)
 end
 
 function CropEnhancer:onCropEnhancerBorderWidth(args)
+  if type(args) ~= "number" then return end
   saveSetting("border_max_width", args)
   if self.ui.document and self.ui.document.configurable then
     self.ui.document.configurable.crop_border_max_width = args
@@ -417,6 +428,7 @@ function CropEnhancer:onCropEnhancerBorderWidth(args)
 end
 
 function CropEnhancer:onCropEnhancerMinArea(args)
+  if type(args) ~= "number" then return end
   saveSetting("min_content_area", args)
   if self.ui.document and self.ui.document.configurable then
     self.ui.document.configurable.crop_min_content_area = args
@@ -425,6 +437,8 @@ function CropEnhancer:onCropEnhancerMinArea(args)
 end
 
 function CropEnhancer:onCropEnhancerFrameFill(args)
+  if type(args) ~= "number" then return end
+  args = math.min(args, SETTINGS_LIMITS.frame_fill_max)
   saveSetting("frame_fill_max", args)
   if self.ui.document and self.ui.document.configurable then
     self.ui.document.configurable.crop_frame_fill_max = args
@@ -433,6 +447,7 @@ function CropEnhancer:onCropEnhancerFrameFill(args)
 end
 
 function CropEnhancer:onCropEnhancerThinEdge(args)
+  if type(args) ~= "number" then return end
   saveSetting("thin_edge_frac", args)
   if self.ui.document and self.ui.document.configurable then
     self.ui.document.configurable.crop_thin_edge_frac = args
@@ -441,6 +456,7 @@ function CropEnhancer:onCropEnhancerThinEdge(args)
 end
 
 function CropEnhancer:onCropEnhancerMargin(args)
+  if type(args) ~= "number" then return end
   saveSetting("margin", args)
   if self.ui.document and self.ui.document.configurable then
     self.ui.document.configurable.crop_margin = args
@@ -460,11 +476,7 @@ function CropEnhancer:addToMainMenu(menu_items)
           return cropEnhancerEnabled(self.ui.document)
         end,
         callback = function()
-          crop_enhancer_enabled = not crop_enhancer_enabled
-          if self.ui.document and self.ui.document.configurable then
-            self.ui.document.configurable.crop_enhancer = crop_enhancer_enabled and 1 or 0
-          end
-          dbg("menu toggle -> %s", tostring(crop_enhancer_enabled))
+          self:onCropEnhancerToggle(not cropEnhancerEnabled(self.ui.document))
         end,
       },
       {

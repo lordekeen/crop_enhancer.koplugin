@@ -53,14 +53,26 @@ four aspect ratios (`P10`–`P12`).
 
 ## Running
 
+Generate the pages from `bench/` — both writers emit `pages/` and `raw/` into
+the working directory, and `run.lua` reads `$HARNESS_DIR/raw/`:
+
+```sh
+cd ~/Sources/crop_enhancer.koplugin/bench
+SAMPLES_DIR=samples python3 prep.py
+python3 synthetic.py
+```
+
+Then run the harness from the KOReader build directory, because `ffi.loadlib`
+resolves `libs/` relative to the cwd:
+
 ```sh
 KDIR=~/Sources/koreader/base/build/x86_64-pc-linux-gnu-debug
-cd "$KDIR"   # ffi.loadlib resolves libs/ relative to the cwd
+export HARNESS_DIR=~/Sources/crop_enhancer.koplugin/bench
+cd "$KDIR"
 KO_ROOT=~/Sources/koreader PLUGIN_DIR=~/Sources/crop_enhancer.koplugin \
-  HARNESS_DIR=~/Sources/crop_enhancer.koplugin/bench \
-  luajit ~/Sources/crop_enhancer.koplugin/bench/run.lua PAGE1,PAGE2 > results.txt
-python3 bench/compare.py results.txt
-python3 bench/timings.py results.txt
+  luajit "$HARNESS_DIR/run.lua" PAGE1,PAGE2 > "$HARNESS_DIR/results.txt"
+python3 "$HARNESS_DIR/compare.py" "$HARNESS_DIR/results.txt" "$HARNESS_DIR/pages"
+python3 "$HARNESS_DIR/timings.py" "$HARNESS_DIR/results.txt"
 ```
 
 Environment knobs:
@@ -71,7 +83,8 @@ Environment knobs:
   detector settings for a sweep (unset keys use `SETTINGS_DEFAULTS`).
 
 Pages are raw 8-bit grayscale with a `<II` width/height header; both page
-writers emit them next to the PNGs that `compare.py` uses for its visuals.
+writers emit them next to the PNGs that `compare.py` uses for its visuals, and
+`compare.py` writes `compare.png` into the working directory.
 
 The harness needs a KOReader build tree because `ffi.loadlib` looks for
 `libs/` relative to the working directory, and stock LuaJIT lacks
@@ -126,3 +139,9 @@ off the top: high values start classifying body text that reaches the edge as a
 hollow frame. `EDGEPARA` is the synthetic version of that failure — one fused
 paragraph at ~29% ink fill whose top edge survives at 0.20 and would be dropped
 at 0.50, so it fails if the cap is ever raised.
+
+Those 0.50 numbers were measured before the cap existed, so they cannot be
+reproduced with `CE_SETTINGS="frame_fill_max=0.50"` — the detector clamps it
+back to 0.20. To reproduce them, raise `SETTINGS_LIMITS.frame_fill_max` in
+`crop_enhancer_settings.lua` temporarily; with the cap in place the sweep is flat
+above 0.20, which is the intended behaviour.
